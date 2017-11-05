@@ -15,4 +15,5 @@ In VBA you can also handle normal files and folders, but zip and cabinet folders
 Full documentation can be found at *Experts Exhange*:
 
 [Zip and unzip files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31130/Zip-and-unzip-files-and-folders-with-VBA-the-Windows-Explorer-way.html)
+
 [Handle cabinet files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31144/Handle-cabinet-files-and-folders-with-VBA-the-Windows-Explorer-way.html)
