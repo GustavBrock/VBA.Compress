@@ -2,7 +2,7 @@ Attribute VB_Name = "FileCompress"
 Option Compare Text
 Option Explicit
 
-' Compression and decompression methods v1.0.1
+' Compression and decompression methods v1.0.2
 ' (c) Gustav Brock, Cactus Data ApS, CPH
 ' https://github.com/GustavBrock/VBA.Compress
 '
@@ -130,7 +130,7 @@ Private Declare Sub Sleep Lib "kernel32" ( _
 '   Scripting.FileSystemObject:
 '       Microsoft Scripting Runtime
 '
-' 2017-10-27. Gustav Brock. Cactus Data ApS, CPH.
+' 2017-10-31. Gustav Brock. Cactus Data ApS, CPH.
 '
 Public Function Cab( _
     ByVal Path As String, _
@@ -188,6 +188,8 @@ Public Function Cab( _
     Dim Version             As Integer
     Dim Item                As Long
     Dim PathName            As String
+    Dim CurrentDirectory    As String
+    Dim TempDirectory       As String
     Dim Result              As Long
     
     If FileSystemObject.FileExists(Path) Then
@@ -295,7 +297,7 @@ Public Function Cab( _
             .Write ".Set InfFileName=NUL" & vbCrLf
             .Write ".Set RptFileName=NUL" & vbCrLf
             .Write ".Set UniqueFiles=OFF" & vbCrLf
-            .Write ".Set SourceDir=""" & IIf(CabMono, CabPath, Path) & """" & vbCrLf
+            .Write ".Set SourceDir=""" & IIf(CabMono, FileSystemObject.GetParentFolderName(Path), Path) & """" & vbCrLf
             ' Append list of files to compress.
             For Item = LBound(FileNames) To UBound(FileNames)
                 .Write """" & FileNames(Item) & """" & vbCrLf
@@ -303,10 +305,21 @@ Public Function Cab( _
             .Close
         End With
         
+        ' Record the current directory.
+        CurrentDirectory = CurDir
+        ' Change current directory to temp folder.
+        TempDirectory = Environ("temp")
+        ChDrive TempDirectory
+        ChDir TempDirectory
+
         ' Create the cabinet file.
         PathName = "makecab.exe /v1 /f """ & CabTemp & """"
         ' ShellWait returns True for no errors.
         Result = ShellWait("cmd /c " & PathName & "", vbMinimizedNoFocus)
+        
+        ' Restore the current directory.
+        ChDrive CurrentDirectory
+        ChDir CurrentDirectory
         
         ' Delete the directive file.
         FileSystemObject.DeleteFile CabTemp, True
@@ -330,12 +343,12 @@ End Function
 '
 ' Parameters:
 '   Path:
-'       Valid (UNC) path to a valid zip file. Extension can be another than "zip".
+'       Valid (UNC) path to a valid zip file. Extension can be another than "cab".
 '   Destination:
 '       (Optional) Valid (UNC) path to the destination folder.
 '   Overwrite:
 '       (Optional) Overwrite (default) or leave an existing folder.
-'       If False, an existing folder will keep other files than those in the extracted zip file.
+'       If False, an existing folder will keep other files than those in the extracted cabinet file.
 '       If True, an existing folder will first be deleted, then recreated.
 '
 '   Path and Destination can be relative paths. If so, the current path is used.
