@@ -1,6 +1,6 @@
 # VBA.Compress
 
-Compression and decompression methods v1.0.1
+Compression and decompression methods v1.0.2
 
 *(c) Gustav Brock, Cactus Data ApS, CPH*
 
@@ -12,10 +12,7 @@ Windows Explorer let you handle zip folders nearly as any other folder: Copy, mo
 In VBA you can also handle normal files and folders, but zip and cabinet folders takes a little more - and that you'll find here.
 
 ### Documentation
-Full documentation can be found at *Experts Exhange* here:
+Full documentation can be found at *Experts Exhange*:
 
 [Zip and unzip files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31130/Zip-and-unzip-files-and-folders-with-VBA-the-Windows-Explorer-way.html)
-
-and here:
-
 [Handle cabinet files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31144/Handle-cabinet-files-and-folders-with-VBA-the-Windows-Explorer-way.html)
