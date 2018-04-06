@@ -1,11 +1,11 @@
 # VBA.Compress
 
-Compression and decompression methods v1.0.2
+Compression and decompression methods v1.1.0
 
 *(c) Gustav Brock, Cactus Data ApS, CPH*
 
 ### Zip and Cabinet Folders
-Set of functions to zip, unzip, compress, and decompress zip and cab (cabinet) files and folders.
+Set of functions to zip, unzip, compress, and decompress zip and cab (cabinet) files and folders for both 32- and 64-bit VBA.
 No third-party tools used.
 
 Windows Explorer let you handle zip folders nearly as any other folder: Copy, move, change, and delete, etc., and also open cabinet files.

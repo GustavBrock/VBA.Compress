@@ -2,7 +2,7 @@ Attribute VB_Name = "FileCompress"
 Option Compare Text
 Option Explicit
 
-' Compression and decompression methods v1.0.2
+' Compression and decompression methods v1.1.0
 ' (c) Gustav Brock, Cactus Data ApS, CPH
 ' https://github.com/GustavBrock/VBA.Compress
 '
@@ -51,11 +51,19 @@ Private Const WaitFailed            As Long = &HFFFFFFFF
 ' If the function fails, the return value is NULL (0).
 ' To get extended error information, call GetLastError.
 '
-Private Declare Function OpenProcess Lib "kernel32" ( _
-    ByVal dwDesiredAccess As Long, _
-    ByVal bInheritHandle As Long, _
-    ByVal dwProcessId As Long) _
-    As Long
+#If VBA7 Then
+    Private Declare PtrSafe Function OpenProcess Lib "kernel32" ( _
+        ByVal dwDesiredAccess As Long, _
+        ByVal bInheritHandle As Long, _
+        ByVal dwProcessId As Long) _
+        As LongPtr
+#Else
+    Private Declare Function OpenProcess Lib "kernel32" ( _
+        ByVal dwDesiredAccess As Long, _
+        ByVal bInheritHandle As Long, _
+        ByVal dwProcessId As Long) _
+        As Long
+#End If
 
 ' The WaitForSingleObject function returns when one of the following occurs:
 ' - the specified object is in the signaled state.
@@ -68,24 +76,42 @@ Private Declare Function OpenProcess Lib "kernel32" ( _
 ' immediately.
 ' If dwMilliseconds is Infinite, the function's time-out interval never elapses.
 '
-Private Declare Function WaitForSingleObject Lib "kernel32" ( _
-    ByVal hHandle As Long, _
-    ByVal dwMilliseconds As Long) _
-    As Long
+#If VBA7 Then
+    Private Declare PtrSafe Function WaitForSingleObject Lib "kernel32" ( _
+        ByVal hHandle As LongPtr, _
+        ByVal dwMilliseconds As Long) _
+        As Long
+#Else
+    Private Declare Function WaitForSingleObject Lib "kernel32" ( _
+        ByVal hHandle As Long, _
+        ByVal dwMilliseconds As Long) _
+        As Long
+#End If
 
 ' Closes an open object handle.
 ' If the function succeeds, the return value is nonzero.
 ' If the function fails, the return value is zero.
 ' To get extended error information, call GetLastError.
 '
-Private Declare Function CloseHandle Lib "kernel32" ( _
-    ByVal hObject As Long) _
-    As Long
-  
+#If VBA7 Then
+    Private Declare PtrSafe Function CloseHandle Lib "kernel32" ( _
+        ByVal hObject As LongPtr) _
+        As Long
+#Else
+    Private Declare Function CloseHandle Lib "kernel32" ( _
+        ByVal hObject As Long) _
+        As Long
+#End If
+
 ' Suspends the execution of the current thread until the time-out interval elapses.
 '
-Private Declare Sub Sleep Lib "kernel32" ( _
-    ByVal dwMilliseconds As Long)
+#If VBA7 Then
+    Private Declare PtrSafe Sub Sleep Lib "kernel32" ( _
+        ByVal dwMilliseconds As Long)
+#Else
+    Private Declare Sub Sleep Lib "kernel32" ( _
+        ByVal dwMilliseconds As Long)
+#End If
 
 ' Compress a file or a folder to a cabinet file/folder.
 '
@@ -957,7 +983,7 @@ End Function
 '   Command = "cmd.exe /c " & Command
 '   Result = ShellWait(Command)
 '
-' 2017-10-27. Gustav Brock. Cactus Data ApS, CPH.
+' 2018-04-06. Gustav Brock. Cactus Data ApS, CPH.
 '
 Public Function ShellWait( _
     ByVal Command As String, _
@@ -968,9 +994,13 @@ Public Function ShellWait( _
     Const NoProcess     As Long = 0
     Const NoHandle      As Long = 0
     
+#If VBA7 Then
+    Dim ProcessHandle   As LongPtr
+#Else
+    Dim ProcessHandle   As Long
+#End If
     Dim DesiredAccess   As Long
     Dim ProcessId       As Long
-    Dim ProcessHandle   As Long
     Dim WaitTime        As Long
     Dim Closed          As Boolean
     Dim Result          As Long
