@@ -2,7 +2,7 @@ Attribute VB_Name = "FileCompress"
 Option Compare Text
 Option Explicit
 
-' Compression and decompression methods v1.1.0
+' Compression and decompression methods v1.1.1
 ' (c) Gustav Brock, Cactus Data ApS, CPH
 ' https://github.com/GustavBrock/VBA.Compress
 '
@@ -42,6 +42,18 @@ Private Const WaitObject0           As Long = StatusWait0 + 0
 Private Const WaitTimeout           As Long = &H102
 ' The function has failed. To get extended error information, call GetLastError.
 Private Const WaitFailed            As Long = &HFFFFFFFF
+
+
+' Missing enum when using late binding.
+'
+#If EarlyBinding = False Then
+    Public Enum IOMode
+        ForAppending = 8
+        ForReading = 1
+        ForWriting = 2
+    End Enum
+#End If
+
 
 ' API declarations.
 
@@ -875,23 +887,35 @@ End Function
 ' Parameter ParentFolderName is for internal use only and
 ' must not be specified initially.
 '
-' 2017-10-22. Gustav Brock. Cactus Data ApS, CPH.
+' 2018-07-25. Gustav Brock. Cactus Data ApS, CPH.
 '
 Public Function FolderFileNames( _
     ByVal Path As String, _
     Optional ByVal ParentFolderName As String) _
     As Variant
 
+#If EarlyBinding Then
+    ' Microsoft Scripting Runtime.
     Dim FileSystemObject    As Scripting.FileSystemObject
     Dim Folder              As Scripting.Folder
     Dim SubFolder           As Scripting.Folder
     Dim Files               As Scripting.Files
     Dim File                As Scripting.File
+    
+    Set FileSystemObject = New Scripting.FileSystemObject
+#Else
+    Dim FileSystemObject    As Object
+    Dim Folder              As Object
+    Dim SubFolder           As Object
+    Dim Files               As Object
+    Dim File                As Object
+
+    Set FileSystemObject = CreateObject("Scripting.FileSystemObject")
+#End If
+
     Dim FileList            As Variant
     Dim FileListSub         As Variant
 
-    Set FileSystemObject = New FileSystemObject
-    
     If FileSystemObject.FolderExists(Path) Then
         Set Folder = FileSystemObject.GetFolder(Path)
         Set Files = Folder.Files
