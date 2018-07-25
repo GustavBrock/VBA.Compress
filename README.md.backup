@@ -12,7 +12,7 @@ Set of functions to:
 - *zip* and *unzip* zip files and folders
 - *compress* and *decompress* cab (cabinet) files and folders
 
-for both 32- and 64-bit. No third-party tools used, only a single code module.
+for both 32- and 64-bit. No third-party tools used
 
 ### Zip Folders
 ![General](https://raw.githubusercontent.com/GustavBrock/VBA.Compress/master/images/GitZip.png)
