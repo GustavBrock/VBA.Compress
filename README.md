@@ -33,3 +33,11 @@ Full documentation can be found here:
 [Zip and unzip files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31130/Zip-and-unzip-files-and-folders-with-VBA-the-Windows-Explorer-way.html)
 
 [Handle cabinet files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31144/Handle-cabinet-files-and-folders-with-VBA-the-Windows-Explorer-way.html)
+
+<hr>
+
+*If you wish to support my work or need extended support or advice, feel free to:*
+
+<p>
+
+[<img src="https://raw.githubusercontent.com/GustavBrock/VBA.Compress/master/images/BuyMeACoffee.png">](https://www.buymeacoffee.com/gustav/)
