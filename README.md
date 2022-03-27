@@ -36,9 +36,9 @@ Full documentation can be found here:
 
 ![EE Logo](https://raw.githubusercontent.com/GustavBrock/VBA.Compress/master/images/EE%20Logo.png)
 
-[Zip and unzip files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31130/Zip-and-unzip-files-and-folders-with-VBA-the-Windows-Explorer-way.html)
+[Zip and unzip files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31130/Zip-and-unzip-files-and-folders-with-VBA-the-Windows-Explorer-way.html?preview=yvSy86kgNss%3D)
 
-[Handle cabinet files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31144/Handle-cabinet-files-and-folders-with-VBA-the-Windows-Explorer-way.html)
+[Handle cabinet files and folders with VBA the Windows Explorer way](https://www.experts-exchange.com/articles/31144/Handle-cabinet-files-and-folders-with-VBA-the-Windows-Explorer-way.html?preview=i8Bvq8gkxiA%3D)
 
 <hr>
 
