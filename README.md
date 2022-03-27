@@ -2,7 +2,7 @@
 
 ## Compression and decompression methods for VBA
 
-Version 1.1.1
+Version 1.2.0
 
 *(c) Gustav Brock, Cactus Data ApS, CPH*
 

@@ -2,7 +2,7 @@ Attribute VB_Name = "FileCompress"
 Option Compare Text
 Option Explicit
 
-' Compression and decompression methods v1.1.1
+' Compression and decompression methods v1.2.0
 ' (c) Gustav Brock, Cactus Data ApS, CPH
 ' https://github.com/GustavBrock/VBA.Compress
 '
@@ -47,11 +47,40 @@ Private Const WaitFailed            As Long = &HFFFFFFFF
 ' Missing enum when using late binding.
 '
 #If EarlyBinding = False Then
+
     Public Enum IOMode
         ForAppending = 8
         ForReading = 1
         ForWriting = 2
     End Enum
+    
+    Public Enum DriveTypeConst
+        Unknown = 0
+        Removable = 1
+        Fixed = 2
+        Network = 3
+        CDRom = 4
+        RamDisk = 5
+    End Enum
+    
+    Public Enum SpecialFolder
+        WindowsFolder = 0       ' The Windows folder contains files installed by the Windows operating system.
+        SystemFolder = 1        ' The System folder contains libraries, fonts, and device drivers.
+        TemporaryFolder = 2     ' The Temp folder is used to store temporary files.
+    End Enum
+    
+    Public Enum FileAttribute
+        Normal = 0              ' Normal file. No attributes are set.
+        ReadOnly = 1            ' Read-only file. Attribute is read/write.
+        Hidden = 2              ' Hidden file. Attribute is read/write.
+        System = 4              ' System file. Attribute is read/write.
+        Volume = 8              ' Disk drive volume label. Attribute is read-only.
+        Directory = 16          ' Folder or directory. Attribute is read-only.
+        Archive = 32            ' File has changed since last backup. Attribute is read/write.
+        Alias = 1024            ' Link or shortcut. Attribute is read-only.
+        Compressed = 2048       ' Compressed file. Attribute is read-only.
+    End Enum
+    
 #End If
 
 
@@ -168,7 +197,7 @@ Private Const WaitFailed            As Long = &HFFFFFFFF
 '   Scripting.FileSystemObject:
 '       Microsoft Scripting Runtime
 '
-' 2017-10-31. Gustav Brock. Cactus Data ApS, CPH.
+' 2022-03-27. Gustav Brock. Cactus Data ApS, CPH.
 '
 Public Function Cab( _
     ByVal Path As String, _
@@ -286,7 +315,7 @@ Public Function Cab( _
                 End If
             End If
         Else
-            ' Use (and return) the already found folder of the source.
+            ' Use the already found folder of the source.
             Destination = CabPath
         End If
     End If
@@ -301,6 +330,10 @@ Public Function Cab( _
                 ' At this point either the file is deleted or an error is raised.
             Else
                 CabBase = FileSystemObject.GetBaseName(CabFile)
+                ExtensionName = FileSystemObject.GetExtensionName(CabFile)
+                If ExtensionName <> CabExtensionName Then
+                    Extension = "." & ExtensionName
+                End If
                 ' Modify name of the cabinet file to be created to preserve an existing file:
                 '   "Example.cab" -> "Example (2).cab", etc.
                 Version = Version + 1
@@ -315,6 +348,8 @@ Public Function Cab( _
                 CabName = FileSystemObject.GetFileName(CabFile)
             End If
         End If
+        ' Set returned file name.
+        Destination = CabFile
         
         ' Get list of files to compress.
         FileNames = FolderFileNames(Path)
@@ -538,172 +573,270 @@ Public Function DeCab( _
      
 End Function
 
-' Zip a file or a folder to a zip file/folder using Windows Explorer.
-' Default behaviour is similar to right-clicking a file/folder and selecting:
-'   Send to zip file.
+' Returns an array of file names of the specified Path
+' and its subfolders including subfolder name but without
+' the root path (drive letter and parent folder).
+' Names of subfolders themselves are excluded.
 '
-' Parameters:
-'   Path:
-'       Valid (UNC) path to the file or folder to zip.
-'   Destination:
-'       (Optional) Valid (UNC) path to file with zip extension or other extension.
-'   Overwrite:
-'       (Optional) Leave (default) or overwrite an existing zip file.
-'       If False, the created zip file will be versioned: Example.zip, Example (2).zip, etc.
-'       If True, an existing zip file will first be deleted, then recreated.
+' The array holds one file name, if Path is a file.
 '
-'   Path and Destination can be relative paths. If so, the current path is used.
+' Will fail if permission to a subfolder is denied.
 '
-'   If success, 0 is returned, and Destination holds the full path of the created zip file.
-'   If error, error code is returned, and Destination will be zero length string.
+' Example:
+'   FileNameArray = FolderFileNames("C:\Windows\bootstat.dat")
+'   will hold:
+'       bootstat.dat
 '
-' Early binding requires references to:
+'   FileNameArray = FolderFileNames("C:\Windows")
+'   will hold:
+'       bfsvc.exe
+'       bootstat.dat
+'       ...
+'       addins\FXSEXT.ecf
+'       appcompat\appraiser\APPRAISER_FileInventory.xml
+'       ...
 '
-'   Shell:
-'       Microsoft Shell Controls And Automation
+' Format is similar to the DOS command with no root path:
+'   Dir "C:\Windows" /A:-D /B /S
+'   that will output:
+'       C:\Windows\bfsvc.exe
+'       C:\Windows\bootstat.dat
+'       ...
+'       C:\Windows\addins\FXSEXT.ecf
+'       C:\Windows\appcompat\appraiser\APPRAISER_FileInventory.xml
+'       ...
 '
-'   Scripting.FileSystemObject:
-'       Microsoft Scripting Runtime
+' Parameter ParentFolderName is for internal use only and
+' must not be specified initially.
 '
-' 2017-10-22. Gustav Brock. Cactus Data ApS, CPH.
+' 2018-07-25. Gustav Brock. Cactus Data ApS, CPH.
 '
-Public Function Zip( _
+Public Function FolderFileNames( _
     ByVal Path As String, _
-    Optional ByRef Destination As String, _
-    Optional ByVal Overwrite As Boolean) _
-    As Long
+    Optional ByVal ParentFolderName As String) _
+    As Variant
+
+#If EarlyBinding Then
+    ' Microsoft Scripting Runtime.
+    Dim FileSystemObject    As Scripting.FileSystemObject
+    Dim Folder              As Scripting.Folder
+    Dim SubFolder           As Scripting.Folder
+    Dim Files               As Scripting.Files
+    Dim File                As Scripting.File
+    
+    Set FileSystemObject = New Scripting.FileSystemObject
+#Else
+    Dim FileSystemObject    As Object
+    Dim Folder              As Object
+    Dim SubFolder           As Object
+    Dim Files               As Object
+    Dim File                As Object
+
+    Set FileSystemObject = CreateObject("Scripting.FileSystemObject")
+#End If
+
+    Dim FileList            As Variant
+    Dim FileListSub         As Variant
+
+    If FileSystemObject.FolderExists(Path) Then
+        Set Folder = FileSystemObject.GetFolder(Path)
+        Set Files = Folder.Files
+    
+        For Each File In Files
+            If IsEmpty(FileList) Then
+                FileList = Array(FileSystemObject.BuildPath(ParentFolderName, File.Name))
+            Else
+                FileList = Split(Join(FileList, ":") & ":" & FileSystemObject.BuildPath(ParentFolderName, File.Name), ":")
+            End If
+        Next
+        For Each SubFolder In Folder.SubFolders
+            FileListSub = FolderFileNames(SubFolder.Path, FileSystemObject.BuildPath(ParentFolderName, FileSystemObject.GetBaseName(SubFolder)))
+            If Not IsEmpty(FileListSub) Then
+                If IsEmpty(FileList) Then
+                    FileList = FileListSub
+                Else
+                    FileList = Split(Join(FileList, ":") & ":" & Join(FileListSub, ":"), ":")
+                End If
+            End If
+        Next
+    ElseIf FileSystemObject.FileExists(Path) Then
+        FileList = Array(FileSystemObject.GetFile(Path).Name)
+    Else
+        ' Nothing to return.
+        ' Return Empty.
+    End If
+    
+    FolderFileNames = FileList
+    
+End Function
+
+' Check if (a file of) a folder is aliased, meaning located
+' on a drive linked to a folder on another drive.
+' Returns True if the folder is linked, False if not.
+'
+' 2022-03-26. Gustav Brock. Cactus Data ApS, CPH.
+'
+Public Function IsFolderAlias( _
+    ByVal Path As String) _
+    As Boolean
     
 #If EarlyBinding Then
     ' Microsoft Scripting Runtime.
     Dim FileSystemObject    As Scripting.FileSystemObject
-    ' Microsoft Shell Controls And Automation.
-    Dim ShellApplication    As Shell
+    Dim Folder              As Folder
     
     Set FileSystemObject = New Scripting.FileSystemObject
-    Set ShellApplication = New Shell
 #Else
     Dim FileSystemObject    As Object
-    Dim ShellApplication    As Object
+    Dim Folder              As Object
 
     Set FileSystemObject = CreateObject("Scripting.FileSystemObject")
-    Set ShellApplication = CreateObject("Shell.Application")
 #End If
-    
-    ' Mandatory extension of zip file.
-    Const ZipExtensionName  As String = "zip"
-    Const ZipExtension      As String = "." & ZipExtensionName
-    ' Custom error values.
-    Const ErrorPathFile     As Long = 75
-    Const ErrorOther        As Long = -1
-    Const ErrorNone         As Long = 0
-    ' Maximum (arbitrary) allowed count of created zip versions.
-    Const MaxZipVersion     As Integer = 1000
-    
-    Dim ZipHeader           As String
-    Dim ZipPath             As String
-    Dim ZipName             As String
-    Dim ZipFile             As String
-    Dim ZipBase             As String
-    Dim ZipTemp             As String
-    Dim Version             As Integer
-    Dim Result              As Long
+
+    Dim IsAlias             As Boolean
     
     If FileSystemObject.FileExists(Path) Then
-        ' The source is an existing file.
-        ZipName = FileSystemObject.GetBaseName(Path) & ZipExtension
-        ZipPath = FileSystemObject.GetFile(Path).ParentFolder
-    ElseIf FileSystemObject.FolderExists(Path) Then
-        ' The source is an existing folder.
-        ZipName = FileSystemObject.GetBaseName(Path) & ZipExtension
-        ZipPath = FileSystemObject.GetFolder(Path).ParentFolder
-    Else
-        ' The source does not exist.
+        Path = FileSystemObject.GetParentFolderName(Path)
     End If
-       
-    If ZipName = "" Then
-        ' Nothing to zip. Exit.
-        Destination = ""
-    Else
-        If Destination <> "" Then
-            If FileSystemObject.GetExtensionName(Destination) = "" Then
-                ' Destination is a folder.
-                ZipPath = Destination
-            Else
-                ' Destination is a file.
-                ZipName = FileSystemObject.GetFileName(Destination)
-                ZipPath = FileSystemObject.GetParentFolderName(Destination)
+    If FileSystemObject.FolderExists(Path) Then
+        Set Folder = FileSystemObject.GetFolder(Path)
+        
+        Do While Not Folder.IsRootFolder
+            If (Folder.Attributes And Alias) = Alias Then
+                IsAlias = True
+                Exit Do
             End If
-        Else
-            ' Use the already found folder of the source.
-        End If
-        ZipFile = FileSystemObject.BuildPath(ZipPath, ZipName)
+            Set Folder = Folder.ParentFolder
+        Loop
+        
+        Set Folder = Nothing
+    End If
+    
+    Set FileSystemObject = Nothing
+    
+    IsFolderAlias = IsAlias
 
-        If FileSystemObject.FileExists(ZipFile) Then
-            If Overwrite = True Then
-                ' Delete an existing file.
-                FileSystemObject.DeleteFile ZipFile, True
-                ' At this point either the file is deleted or an error is raised.
+End Function
+
+' Lists the files of a folder and its subfolders
+' including the subfolder name but without the
+' root path (drive letter and parent folder).
+'
+' Returns the count of files.
+'
+' Will fail if permission to a subfolder is denied.
+'
+' Example:
+'   FileCount = ListFolderFiles("C:\Windows")
+'   will list:
+'       bfsvc.exe
+'       bootstat.dat
+'       ...
+'       addins\FXSEXT.ecf
+'       appcompat\appraiser\APPRAISER_FileInventory.xml
+'       ...
+'
+' 2017-10-22. Gustav Brock. Cactus Data ApS, CPH.
+'
+Public Function ListFolderFiles( _
+    ByVal Path As String) _
+    As Long
+    
+    Dim FileNames   As Variant
+    Dim Item        As Long
+    
+    FileNames = FolderFileNames(Path)
+    If Not IsEmpty(FileNames) Then
+        For Item = LBound(FileNames) To UBound(FileNames)
+            Debug.Print FileNames(Item)
+        Next
+    End If
+    
+    ListFolderFiles = Item
+
+End Function
+
+' Shells out to an external process and waits until the process ends.
+' Returns 0 (zero) for no errors, or an error code.
+'
+' The call will wait for an infinite amount of time for the process to end.
+' The process will seem frozen until the shelled process terminates. Thus,
+' if the shelled process hangs, so will this.
+'
+' A better approach could be to wait a specific amount of time and, when the
+' time-out interval expires, test the return value. If it is WaitTimeout, the
+' process is still not signaled. Then either wait again or continue with the
+' processing.
+'
+' Waiting for a DOS application is different, as the DOS window doesn't close
+' when the application is done.
+' To avoid this, prefix the application command called (shelled to) with:
+' "command.com /c " or "cmd.exe /c ".
+'
+' For example:
+'   Command = "cmd.exe /c " & Command
+'   Result = ShellWait(Command)
+'
+' 2018-04-06. Gustav Brock. Cactus Data ApS, CPH.
+'
+Public Function ShellWait( _
+    ByVal Command As String, _
+    Optional ByVal WindowStyle As VbAppWinStyle = vbNormalNoFocus) _
+    As Long
+
+    Const InheritHandle As Long = &H0
+    Const NoProcess     As Long = 0
+    Const NoHandle      As Long = 0
+    
+#If VBA7 Then
+    Dim ProcessHandle   As LongPtr
+#Else
+    Dim ProcessHandle   As Long
+#End If
+    Dim DesiredAccess   As Long
+    Dim ProcessId       As Long
+    Dim WaitTime        As Long
+    Dim Closed          As Boolean
+    Dim Result          As Long
+  
+    If Len(Trim(Command)) = 0 Then
+        ' Nothing to do. Exit.
+    Else
+        ProcessId = Shell(Command, WindowStyle)
+        If ProcessId = NoProcess Then
+            ' Process could not be started.
+        Else
+            ' Get a handle to the shelled process.
+            DesiredAccess = Synchronize
+            ProcessHandle = OpenProcess(DesiredAccess, InheritHandle, ProcessId)
+            ' Wait "forever".
+            WaitTime = Infinite
+            ' If successful, wait for the application to end and close the handle.
+            If ProcessHandle = NoHandle Then
+                ' Should not happen.
             Else
-                ZipBase = FileSystemObject.GetBaseName(ZipFile)
-                ' Modify name of the zip file to be created to preserve an existing file:
-                '   "Example.zip" -> "Example (2).zip", etc.
-                Version = Version + 1
-                Do
-                    Version = Version + 1
-                    ZipFile = FileSystemObject.BuildPath(ZipPath, ZipBase & Format(Version, " \(0\)") & ZipExtension)
-                Loop Until FileSystemObject.FileExists(ZipFile) = False Or Version > MaxZipVersion
-                If Version > MaxZipVersion Then
-                    ' Give up.
-                    Err.Raise ErrorPathFile, "Zip Create", "File could not be created."
+                ' Process is running.
+                Result = WaitForSingleObject(ProcessHandle, WaitTime)
+                ' Process ended.
+                Select Case Result
+                    Case WaitObject0
+                        ' Success.
+                    Case WaitAbandoned, WaitTimeout, WaitFailed
+                        ' Know error.
+                    Case Else
+                        ' Other error.
+                End Select
+                ' Close process.
+                Closed = CBool(CloseHandle(ProcessHandle))
+                If Result = WaitObject0 Then
+                    ' Return error if not closed.
+                    Result = Not Closed
                 End If
             End If
         End If
-    
-        ' Create a temporary zip name to allow for a final destination file with another extension than zip.
-        ZipTemp = FileSystemObject.BuildPath(ZipPath, FileSystemObject.GetBaseName(FileSystemObject.GetTempName()) & ZipExtension)
-        ' Create empty zip folder.
-        ' Header string provided by Stuart McLachlan <stuart@lexacorp.com.pg>.
-        ZipHeader = Chr(80) & Chr(75) & Chr(5) & Chr(6) & String(18, vbNullChar)
-        With FileSystemObject.OpenTextFile(ZipTemp, ForWriting, True)
-            .Write ZipHeader
-            .Close
-        End With
-        
-        ' Resolve relative paths.
-        ZipTemp = FileSystemObject.GetAbsolutePathName(ZipTemp)
-        Path = FileSystemObject.GetAbsolutePathName(Path)
-        ' Copy the source file/folder into the zip file.
-        With ShellApplication
-            Debug.Print Timer, "Zipping started . ";
-            .Namespace(CVar(ZipTemp)).CopyHere CVar(Path)
-            ' Ignore error while looking up the zipped file before is has been added.
-            On Error Resume Next
-            ' Wait for the file to created.
-            Do Until .Namespace(CVar(ZipTemp)).Items.Count = 1
-                ' Wait a little ...
-                Sleep 50
-                Debug.Print ".";
-            Loop
-            Debug.Print
-            ' Resume normal error handling.
-            On Error GoTo 0
-            Debug.Print Timer, "Zipping finished."
-        End With
-        ' Rename the temporary zip to its final name.
-        FileSystemObject.MoveFile ZipTemp, ZipFile
     End If
-    
-    Set ShellApplication = Nothing
-    Set FileSystemObject = Nothing
-    
-    If Err.Number <> ErrorNone Then
-        Destination = ""
-        Result = Err.Number
-    ElseIf Destination = "" Then
-        Result = ErrorOther
-    End If
-    
-    Zip = Result
+  
+    ShellWait = Result
 
 End Function
 
@@ -851,222 +984,231 @@ Public Function UnZip( _
      
 End Function
 
-' Returns an array of file names of the specified Path
-' and its subfolders including subfolder name but without
-' the root path (drive letter and parent folder).
-' Names of subfolders themselves are excluded.
+' Zip a file or a folder to a zip file/folder using Windows Explorer.
+' Default behaviour is similar to right-clicking a file/folder and selecting:
+'   Send to zip file.
 '
-' The array holds one file name, if Path is a file.
+' Parameters:
+'   Path:
+'       Valid (UNC) path to the file or folder to zip.
+'   Destination:
+'       (Optional) Valid (UNC) path to file with zip extension or other extension.
+'   Overwrite:
+'       (Optional) Leave (default) or overwrite an existing zip file.
+'       If False, the created zip file will be versioned: Example.zip, Example (2).zip, etc.
+'       If True, an existing zip file will first be deleted, then recreated.
 '
-' Will fail if permission to a subfolder is denied.
+'   Path and Destination can be relative paths. If so, the current path is used.
 '
-' Example:
-'   FileNameArray = FolderFileNames("C:\Windows\bootstat.dat")
-'   will hold:
-'       bootstat.dat
+'   If success, 0 is returned, and Destination holds the full path of the created zip file.
+'   If error, error code is returned, and Destination will be zero length string.
 '
-'   FileNameArray = FolderFileNames("C:\Windows")
-'   will hold:
-'       bfsvc.exe
-'       bootstat.dat
-'       ...
-'       addins\FXSEXT.ecf
-'       appcompat\appraiser\APPRAISER_FileInventory.xml
-'       ...
+' Early binding requires references to:
 '
-' Format is similar to the DOS command with no root path:
-'   Dir "C:\Windows" /A:-D /B /S
-'   that will output:
-'       C:\Windows\bfsvc.exe
-'       C:\Windows\bootstat.dat
-'       ...
-'       C:\Windows\addins\FXSEXT.ecf
-'       C:\Windows\appcompat\appraiser\APPRAISER_FileInventory.xml
-'       ...
+'   Shell:
+'       Microsoft Shell Controls And Automation
 '
-' Parameter ParentFolderName is for internal use only and
-' must not be specified initially.
+'   Scripting.FileSystemObject:
+'       Microsoft Scripting Runtime
 '
-' 2018-07-25. Gustav Brock. Cactus Data ApS, CPH.
+' 2022-03-25. Gustav Brock. Cactus Data ApS, CPH.
 '
-Public Function FolderFileNames( _
+Public Function Zip( _
     ByVal Path As String, _
-    Optional ByVal ParentFolderName As String) _
-    As Variant
-
+    Optional ByRef Destination As String, _
+    Optional ByVal Overwrite As Boolean) _
+    As Long
+    
 #If EarlyBinding Then
     ' Microsoft Scripting Runtime.
     Dim FileSystemObject    As Scripting.FileSystemObject
-    Dim Folder              As Scripting.Folder
-    Dim SubFolder           As Scripting.Folder
-    Dim Files               As Scripting.Files
-    Dim File                As Scripting.File
+    ' Microsoft Shell Controls And Automation.
+    Dim ShellApplication    As Shell
     
     Set FileSystemObject = New Scripting.FileSystemObject
+    Set ShellApplication = New Shell
 #Else
     Dim FileSystemObject    As Object
-    Dim Folder              As Object
-    Dim SubFolder           As Object
-    Dim Files               As Object
-    Dim File                As Object
+    Dim ShellApplication    As Object
 
     Set FileSystemObject = CreateObject("Scripting.FileSystemObject")
+    Set ShellApplication = CreateObject("Shell.Application")
 #End If
-
-    Dim FileList            As Variant
-    Dim FileListSub         As Variant
-
-    If FileSystemObject.FolderExists(Path) Then
-        Set Folder = FileSystemObject.GetFolder(Path)
-        Set Files = Folder.Files
     
-        For Each File In Files
-            If IsEmpty(FileList) Then
-                FileList = Array(FileSystemObject.BuildPath(ParentFolderName, File.Name))
-            Else
-                FileList = Split(Join(FileList, ":") & ":" & FileSystemObject.BuildPath(ParentFolderName, File.Name), ":")
-            End If
-        Next
-        For Each SubFolder In Folder.SubFolders
-            FileListSub = FolderFileNames(SubFolder.Path, FileSystemObject.BuildPath(ParentFolderName, FileSystemObject.GetBaseName(SubFolder)))
-            If Not IsEmpty(FileListSub) Then
-                If IsEmpty(FileList) Then
-                    FileList = FileListSub
+    ' Mandatory extension of zip file.
+    Const ZipExtensionName  As String = "zip"
+    Const ZipExtension      As String = "." & ZipExtensionName
+    ' Native error numbers
+    Const ErrorFileNotFound As Long = 53
+    Const ErrorFileExists   As Long = 58
+    Const ErrorNoPermission As Long = 70
+    Const ErrorPathFile     As Long = 75
+    ' Custom error numbers.
+    Const ErrorOther        As Long = -1
+    Const ErrorNone         As Long = 0
+    ' Maximum (arbitrary) allowed count of created zip versions.
+    Const MaxZipVersion     As Integer = 1000
+    
+    Dim IsRemovableDrive    As Boolean
+    Dim Counter             As Long
+    Dim Extension           As String
+    Dim ExtensionName       As String
+    Dim ZipHeader           As String
+    Dim ZipPath             As String
+    Dim ZipName             As String
+    Dim ZipFile             As String
+    Dim ZipBase             As String
+    Dim ZipTemp             As String
+    Dim Version             As Integer
+    Dim Result              As Long
+    
+    If FileSystemObject.FileExists(Path) Then
+        ' The source is an existing file.
+        ZipName = FileSystemObject.GetBaseName(Path) & ZipExtension
+        ZipPath = FileSystemObject.GetFile(Path).ParentFolder
+    ElseIf FileSystemObject.FolderExists(Path) Then
+        ' The source is an existing folder.
+        ZipName = FileSystemObject.GetBaseName(Path) & ZipExtension
+        ZipPath = FileSystemObject.GetFolder(Path).ParentFolder
+    Else
+        ' The source does not exist.
+    End If
+       
+    If ZipName = "" Then
+        ' Nothing to zip. Exit.
+        Destination = ""
+    Else
+        If Destination <> "" Then
+            If FileSystemObject.GetExtensionName(Destination) = "" Then
+                If FileSystemObject.FolderExists(Destination) Then
+                    ZipPath = Destination
                 Else
-                    FileList = Split(Join(FileList, ":") & ":" & Join(FileListSub, ":"), ":")
+                    ' No folder for the zip file. Exit.
+                    Destination = ""
+                End If
+            Else
+                ' Destination is a file.
+                ZipName = FileSystemObject.GetFileName(Destination)
+                ZipPath = FileSystemObject.GetParentFolderName(Destination)
+                If ZipPath = "" Then
+                    ' No target folder specified. Use the folder of the source.
+                    ZipPath = FileSystemObject.GetParentFolderName(Path)
                 End If
             End If
-        Next
-    ElseIf FileSystemObject.FileExists(Path) Then
-        FileList = Array(FileSystemObject.GetFile(Path).Name)
-    Else
-        ' Nothing to return.
-        ' Return Empty.
-    End If
-    
-    FolderFileNames = FileList
-    
-End Function
-
-' Lists the files of a folder and its subfolders
-' including the subfolder name but without the
-' root path (drive letter and parent folder).
-'
-' Returns the count of files.
-'
-' Will fail if permission to a subfolder is denied.
-'
-' Example:
-'   FileCount = ListFolderFiles("C:\Windows")
-'   will list:
-'       bfsvc.exe
-'       bootstat.dat
-'       ...
-'       addins\FXSEXT.ecf
-'       appcompat\appraiser\APPRAISER_FileInventory.xml
-'       ...
-'
-' 2017-10-22. Gustav Brock. Cactus Data ApS, CPH.
-'
-Public Function ListFolderFiles( _
-    ByVal Path As String) _
-    As Long
-    
-    Dim FileNames   As Variant
-    Dim Item        As Long
-    
-    FileNames = FolderFileNames(Path)
-    If Not IsEmpty(FileNames) Then
-        For Item = LBound(FileNames) To UBound(FileNames)
-            Debug.Print FileNames(Item)
-        Next
-    End If
-    
-    ListFolderFiles = Item
-
-End Function
-
-' Shells out to an external process and waits until the process ends.
-' Returns 0 (zero) for no errors, or an error code.
-'
-' The call will wait for an infinite amount of time for the process to end.
-' The process will seem frozen until the shelled process terminates. Thus,
-' if the shelled process hangs, so will this.
-'
-' A better approach could be to wait a specific amount of time and, when the
-' time-out interval expires, test the return value. If it is WaitTimeout, the
-' process is still not signaled. Then either wait again or continue with the
-' processing.
-'
-' Waiting for a DOS application is different, as the DOS window doesn't close
-' when the application is done.
-' To avoid this, prefix the application command called (shelled to) with:
-' "command.com /c " or "cmd.exe /c ".
-'
-' For example:
-'   Command = "cmd.exe /c " & Command
-'   Result = ShellWait(Command)
-'
-' 2018-04-06. Gustav Brock. Cactus Data ApS, CPH.
-'
-Public Function ShellWait( _
-    ByVal Command As String, _
-    Optional ByVal WindowStyle As VbAppWinStyle = vbNormalNoFocus) _
-    As Long
-
-    Const InheritHandle As Long = &H0
-    Const NoProcess     As Long = 0
-    Const NoHandle      As Long = 0
-    
-#If VBA7 Then
-    Dim ProcessHandle   As LongPtr
-#Else
-    Dim ProcessHandle   As Long
-#End If
-    Dim DesiredAccess   As Long
-    Dim ProcessId       As Long
-    Dim WaitTime        As Long
-    Dim Closed          As Boolean
-    Dim Result          As Long
-  
-    If Len(Trim(Command)) = 0 Then
-        ' Nothing to do. Exit.
-    Else
-        ProcessId = Shell(Command, WindowStyle)
-        If ProcessId = NoProcess Then
-            ' Process could not be started.
         Else
-            ' Get a handle to the shelled process.
-            DesiredAccess = Synchronize
-            ProcessHandle = OpenProcess(DesiredAccess, InheritHandle, ProcessId)
-            ' Wait "forever".
-            WaitTime = Infinite
-            ' If successful, wait for the application to end and close the handle.
-            If ProcessHandle = NoHandle Then
-                ' Should not happen.
+            ' Use the already found folder of the source.
+            Destination = ZipPath
+        End If
+    End If
+        
+    If Destination <> "" Then
+        ZipFile = FileSystemObject.BuildPath(ZipPath, ZipName)
+
+        If FileSystemObject.FileExists(ZipFile) Then
+            If Overwrite = True Then
+                ' Delete an existing file.
+                FileSystemObject.DeleteFile ZipFile, True
+                ' At this point either the file is deleted or an error is raised.
             Else
-                ' Process is running.
-                Result = WaitForSingleObject(ProcessHandle, WaitTime)
-                ' Process ended.
-                Select Case Result
-                    Case WaitObject0
-                        ' Success.
-                    Case WaitAbandoned, WaitTimeout, WaitFailed
-                        ' Know error.
-                    Case Else
-                        ' Other error.
-                End Select
-                ' Close process.
-                Closed = CBool(CloseHandle(ProcessHandle))
-                If Result = WaitObject0 Then
-                    ' Return error if not closed.
-                    Result = Not Closed
+                ZipBase = FileSystemObject.GetBaseName(ZipFile)
+                ExtensionName = FileSystemObject.GetExtensionName(ZipFile)
+                Extension = "." & ExtensionName
+                
+                ' Modify name of the zip file to be created to preserve an existing file:
+                '   "Example.zip" -> "Example (2).zip", etc.
+                Version = Version + 1
+                Do
+                    Version = Version + 1
+                    ZipFile = FileSystemObject.BuildPath(ZipPath, ZipBase & Format(Version, " \(0\)") & Extension)
+                Loop Until FileSystemObject.FileExists(ZipFile) = False Or Version > MaxZipVersion
+                If Version > MaxZipVersion Then
+                    ' Give up.
+                    Err.Raise ErrorPathFile, "Zip Create", "File could not be created."
                 End If
             End If
         End If
+        ' Set returned file name.
+        Destination = ZipFile
+    
+        IsRemovableDrive = (FileSystemObject.GetDrive(FileSystemObject.GetDriveName(ZipPath)).DriveType = Removable)
+        If Not IsRemovableDrive Then
+            ' Check that the file/folder doesn't live on a linked drive.
+            IsRemovableDrive = IsFolderAlias(ZipPath)
+        End If
+        
+        ' Create a temporary zip name to allow for a final destination file with another extension than zip.
+        If IsRemovableDrive Then
+            ZipTemp = FileSystemObject.BuildPath(FileSystemObject.GetSpecialFolder(TemporaryFolder), FileSystemObject.GetBaseName(FileSystemObject.GetTempName()) & ZipExtension)
+        Else
+            ZipTemp = FileSystemObject.BuildPath(ZipPath, FileSystemObject.GetBaseName(FileSystemObject.GetTempName()) & ZipExtension)
+        End If
+        ' Create empty zip folder.
+        ' Header string provided by Stuart McLachlan <stuart@lexacorp.com.pg>.
+        ZipHeader = Chr(80) & Chr(75) & Chr(5) & Chr(6) & String(18, vbNullChar)
+        With FileSystemObject.OpenTextFile(ZipTemp, ForWriting, True)
+            .Write ZipHeader
+            .Close
+        End With
+        
+        ' Resolve relative paths.
+        ZipTemp = FileSystemObject.GetAbsolutePathName(ZipTemp)
+        Path = FileSystemObject.GetAbsolutePathName(Path)
+        ' Copy the source file/folder into the zip file.
+        With ShellApplication
+            Debug.Print Timer, "Zipping started . ";
+            DoEvents
+            .Namespace(CVar(ZipTemp)).CopyHere CVar(Path)
+            DoEvents
+            ' Ignore error while looking up the zipped file before is has been added.
+            On Error Resume Next
+            
+            ' Wait for the file to created.
+            Do Until .Namespace(CVar(ZipTemp)).Items.Count = 1 Or Counter = 10
+                ' Wait a little ...
+                Sleep 50
+                Debug.Print ".";
+                DoEvents
+                Counter = Counter + 1
+            Loop
+            Debug.Print Counter
+            
+            ' Resume normal error handling.
+            On Error GoTo 0
+            Debug.Print Timer, "Zipping finished."
+        End With
+
+        ' Copy (Rename) the temporary zip to its final name.
+        On Error Resume Next
+        Do
+            DoEvents
+            FileSystemObject.MoveFile ZipTemp, ZipFile
+            Debug.Print Str(Err.Number);
+            Sleep 50
+            Select Case Err.Number
+                Case ErrorFileExists, ErrorNoPermission
+                    ' Continue.
+                Case Else
+                    ' Unexpected error.
+                    Exit Do
+            End Select
+            ' Expected error; file has been moved.
+        Loop Until Err.Number = ErrorFileNotFound
+        On Error GoTo 0
+        Debug.Print
+        Debug.Print Timer, "Moving finished."
     End If
-  
-    ShellWait = Result
+    
+    Set ShellApplication = Nothing
+    Set FileSystemObject = Nothing
+    
+    If Err.Number <> ErrorNone Then
+        Destination = ""
+        Result = Err.Number
+    ElseIf Destination = "" Then
+        Result = ErrorOther
+    End If
+    
+    Zip = Result
 
 End Function
 
