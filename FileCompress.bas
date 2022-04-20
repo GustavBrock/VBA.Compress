@@ -2,7 +2,7 @@ Attribute VB_Name = "FileCompress"
 Option Compare Text
 Option Explicit
 
-' Compression and decompression methods v1.2.0
+' Compression and decompression methods v1.2.1
 ' (c) Gustav Brock, Cactus Data ApS, CPH
 ' https://github.com/GustavBrock/VBA.Compress
 '
@@ -197,7 +197,7 @@ Private Const WaitFailed            As Long = &HFFFFFFFF
 '   Scripting.FileSystemObject:
 '       Microsoft Scripting Runtime
 '
-' 2022-03-27. Gustav Brock. Cactus Data ApS, CPH.
+' 2022-04-20. Gustav Brock. Cactus Data ApS, CPH.
 '
 Public Function Cab( _
     ByVal Path As String, _
@@ -283,10 +283,16 @@ Public Function Cab( _
         CabPath = FileSystemObject.GetFile(Path).ParentFolder
         Extension = "." & ExtensionName
     ElseIf FileSystemObject.FolderExists(Path) Then
-        ' The source is an existing folder.
-        CabName = FileSystemObject.GetBaseName(Path) & CabExtension
-        CabPath = FileSystemObject.GetFolder(Path).ParentFolder
-        Extension = CabExtension
+        ' The source is an existing folder or fileshare.
+        CabBase = FileSystemObject.GetBaseName(Path)
+        If CabBase <> "" Then
+            ' Path is a folder.
+            CabName = CabBase & CabExtension
+            CabPath = FileSystemObject.GetFolder(Path).ParentFolder
+            Extension = CabExtension
+        Else
+            ' Path is a fileshare, thus has no parent folder.
+        End If
     Else
         ' The source does not exist.
     End If
@@ -1011,7 +1017,7 @@ End Function
 '   Scripting.FileSystemObject:
 '       Microsoft Scripting Runtime
 '
-' 2022-03-25. Gustav Brock. Cactus Data ApS, CPH.
+' 2022-04-20. Gustav Brock. Cactus Data ApS, CPH.
 '
 Public Function Zip( _
     ByVal Path As String, _
@@ -1067,9 +1073,15 @@ Public Function Zip( _
         ZipName = FileSystemObject.GetBaseName(Path) & ZipExtension
         ZipPath = FileSystemObject.GetFile(Path).ParentFolder
     ElseIf FileSystemObject.FolderExists(Path) Then
-        ' The source is an existing folder.
-        ZipName = FileSystemObject.GetBaseName(Path) & ZipExtension
-        ZipPath = FileSystemObject.GetFolder(Path).ParentFolder
+        ' The source is an existing folder or fileshare.
+        ZipBase = FileSystemObject.GetBaseName(Path)
+        If ZipBase <> "" Then
+            ' Path is a folder.
+            ZipName = ZipBase & ZipExtension
+            ZipPath = FileSystemObject.GetFolder(Path).ParentFolder
+        Else
+            ' Path is a fileshare, thus has no parent folder.
+        End If
     Else
         ' The source does not exist.
     End If
