@@ -2,28 +2,34 @@
 
 ## Compression and decompression methods for VBA
 
-Version 1.2.0
+Version 1.3.0
 
 *(c) Gustav Brock, Cactus Data ApS, CPH*
 
-### Zip and Cabinet Folders
+### Zip, Cabinet, and Archive Folders
 Set of functions to:
 
 - *zip* and *unzip* zip files and folders
 - *compress* and *decompress* cab (cabinet) files and folders
+- *tar* and *untar* archive folders
 
 for both 32- and 64-bit. No third-party tools used, only a single code module.
 
 ### Zip Folders
-![General](https://raw.githubusercontent.com/GustavBrock/VBA.Compress/master/images/GitZip.png)
+![General](https://raw.githubusercontent.com/GustavBrock/VBA.Compress/master/images/GitZip11.png)
 
-Windows Explorer let you handle zip folders nearly as any other folder: Copy, move, change, and delete, etc., and also open cabinet files.
-In VBA, you can also handle normal files and folders, but *zip* folders takes a little more - and that you'll find here.
+Windows Explorer let you handle zip folders nearly as any other folder: Copy, move, change, and delete, etc.
+In VBA, you can also handle normal files and folders, but *zip* folders take a little more - and that you'll find here.
 
 ### Cabinet Folders
-![General](https://raw.githubusercontent.com/GustavBrock/VBA.Compress/master/images/GitCab.png)
+![General](https://raw.githubusercontent.com/GustavBrock/VBA.Compress/master/images/GitCab11.png)
 
-Windows Explorer lets you open cabinet (cab) files like any other folder. In VBA, you can easily handle normal files and folders, but opening and indeed creating *cabinet* files takes a lot more - and that's you'll find here. 
+Windows Explorer lets you open cabinet (cab) files like any other folder. In VBA, you can easily handle normal files and folders, but opening and indeed creating *cabinet* files take a lot more - and that you'll find here. 
+
+### Archive Folders
+![General](https://raw.githubusercontent.com/GustavBrock/VBA.Compress/master/images/GitTar11.png)
+
+Windows Explorer lets you open archive folders (tar and tgz) files like any other folder. In VBA, you can easily handle normal files and folders, but opening and indeed creating *archive* files take a little more - and that you'll find here. 
 
 <hr>
 

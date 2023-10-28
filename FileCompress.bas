@@ -2,12 +2,12 @@ Attribute VB_Name = "FileCompress"
 Option Compare Text
 Option Explicit
 
-' Compression and decompression methods v1.2.1
+' Compression and decompression methods v1.3.0
 ' (c) Gustav Brock, Cactus Data ApS, CPH
 ' https://github.com/GustavBrock/VBA.Compress
 '
-' Set of functions to zip, unzip, compress, and decompress
-' zip and cab (cabinet) files and folders.
+' Set of functions to zip, unzip, compress, decompress, archive, and dearchive
+' zip, cab (cabinet), and tar and tgz (archive) files and folders.
 '
 ' License: MIT (http://opensource.org/licenses/mit-license.php)
 
@@ -202,7 +202,7 @@ Private Const WaitFailed            As Long = &HFFFFFFFF
 Public Function Cab( _
     ByVal Path As String, _
     Optional ByRef Destination As String, _
-    Optional ByVal Overwrite As Boolean = True, _
+    Optional ByVal OverWrite As Boolean = True, _
     Optional ByVal SingleFileExtension As Boolean, _
     Optional ByVal HighCompression As Boolean = True) _
     As Long
@@ -330,7 +330,7 @@ Public Function Cab( _
         CabFile = FileSystemObject.BuildPath(CabPath, CabName)
         
         If FileSystemObject.FileExists(CabFile) Then
-            If Overwrite = True Then
+            If OverWrite = True Then
                 ' Delete an existing file.
                 FileSystemObject.DeleteFile CabFile, True
                 ' At this point either the file is deleted or an error is raised.
@@ -422,7 +422,7 @@ End Function
 '
 ' Parameters:
 '   Path:
-'       Valid (UNC) path to a valid zip file. Extension can be another than "cab".
+'       Valid (UNC) path to a valid cabinet file. Extension can be another than "cab".
 '   Destination:
 '       (Optional) Valid (UNC) path to the destination folder.
 '   Overwrite:
@@ -443,12 +443,12 @@ End Function
 '   Scripting.FileSystemObject:
 '       Microsoft Scripting Runtime
 '
-' 2017-10-22. Gustav Brock. Cactus Data ApS, CPH.
+' 2023-10-28. Gustav Brock. Cactus Data ApS, CPH.
 '
 Public Function DeCab( _
     ByVal Path As String, _
     Optional ByRef Destination As String, _
-    Optional ByVal Overwrite As Boolean = True) _
+    Optional ByVal OverWrite As Boolean = True) _
     As Long
     
 #If EarlyBinding Then
@@ -472,6 +472,10 @@ Public Function DeCab( _
     ' Extension of a cabinet file holding one file only.
     Const CabExtensionName1 As String = "??_"
     Const CabExtension      As String = "." & CabExtensionName
+    ' Extension of an archive file holding one or more files.
+    Const TarExtensionName  As String = "tar"
+    ' Extension of a compressed archive file holding one or more files.
+    Const TgzExtensionName  As String = "tgz"
     ' Mandatory extension of zip file.
     Const ZipExtensionName  As String = "zip"
     ' Custom error values.
@@ -488,7 +492,7 @@ Public Function DeCab( _
         ' The source is an existing file.
         CabName = FileSystemObject.GetBaseName(Path)
         CabPath = FileSystemObject.GetFile(Path).ParentFolder
-        ' Check if the extension matches that of a cabfile holding one file only.
+        ' Check if the extension matches that of a cabinet file holding one file only.
         CabMono = FileSystemObject.GetExtensionName(Path) Like CabExtensionName1
     End If
     
@@ -501,8 +505,10 @@ Public Function DeCab( _
             ' Extract to a custom folder.
             If _
                 FileSystemObject.GetExtensionName(Destination) = CabExtensionName Or _
+                FileSystemObject.GetExtensionName(Destination) = TarExtensionName Or _
+                FileSystemObject.GetExtensionName(Destination) = TgzExtensionName Or _
                 FileSystemObject.GetExtensionName(Destination) = ZipExtensionName Then
-                ' Do not extract to a folder named *.cab or *.zip.
+                ' Do not extract to a folder named *.cab, *.tar, or *.zip.
                 ' Strip extension.
                 Destination = FileSystemObject.BuildPath( _
                     FileSystemObject.GetParentFolderName(Destination), _
@@ -521,7 +527,7 @@ Public Function DeCab( _
         End If
             
         If FileSystemObject.FolderExists(Destination) Then
-            If Overwrite = True Then
+            If OverWrite = True Then
                 ' Delete the existing folder.
                 FileSystemObject.DeleteFolder Destination, True
             ElseIf FileSystemObject.GetFolder(Destination).Files.Count > 0 Then
@@ -846,9 +852,386 @@ Public Function ShellWait( _
 
 End Function
 
+' Archive files or folders using Tar to an archive folder.
+'
+' The files or folders will be compressed to a file with a ".tgz" extension by default,
+' optionally with no compression to a file with a ".tar" extension, optionally with a custom extension.
+'
+' Notes:
+'   Neither bzip2 nor lzma are implemented as these either are slower or don't create smaller archives.
+'
+'   The format of the tar file is the default ustar.
+'   The alternative formats, pax, cpio, and shar, are not implemented.
+'
+' Parameters:
+'   Path:
+'       Valid (UNC) path to the files or folders to archive.
+'   Destination:
+'       (Optional) Valid (UNC) path to a folder or to a file with a
+'       cabinet extension or other extension.
+'   Overwrite:
+'       (Optional) Overwrite (default) or leave an existing archive file.
+'       If False, the created archive file will be versioned:
+'           Example.tar, Example (2).tar, etc.
+'       If True, an existing archive file will first be deleted, then recreated.
+'   HighCompression:
+'       (Optional) Use standard compression or high compression and use the tgz extension by default.
+'       If False, use standard gzip compression. Faster, but larger file size.
+'       If True, use xz compression. Slower, but smaller file size.
+'       Ignored if parameter NoCompression is True.
+'   NoCompression:
+'       (Optional) Use compression or no compression and, if True, use the tar extension by default.
+'       If False, use compression.
+'       If True, use no compression. Much faster speed, similar to file copying.
+'
+'   Path and Destination can be relative paths. If so, the current path is used.
+'
+'   If success, 0 is returned, and Destination holds the full path of the created archive file.
+'   If error, error code is returned, and Destination will be zero length string.
+'
+' Early binding requires references to:
+'
+'   Shell:
+'       Microsoft Shell Controls And Automation
+'
+'   Scripting.FileSystemObject:
+'       Microsoft Scripting Runtime
+'
+' 2023-10-28. Gustav Brock. Cactus Data ApS, CPH.
+'
+Public Function Tar( _
+    ByVal Path As String, _
+    Optional ByRef Destination As String, _
+    Optional ByVal OverWrite As Boolean = True, _
+    Optional ByVal HighCompression As Boolean = False, _
+    Optional ByVal NoCompression As Boolean = False) _
+    As Long
+    
+#If EarlyBinding Then
+    ' Microsoft Scripting Runtime.
+    Dim FileSystemObject    As Scripting.FileSystemObject
+    ' Microsoft Shell Controls And Automation.
+    Dim ShellApplication    As Shell
+    
+    Set FileSystemObject = New Scripting.FileSystemObject
+    Set ShellApplication = New Shell
+#Else
+    Dim FileSystemObject    As Object
+    Dim ShellApplication    As Object
+
+    Set FileSystemObject = CreateObject("Scripting.FileSystemObject")
+    Set ShellApplication = CreateObject("Shell.Application")
+#End If
+    
+    ' Extension of an archive file with or without compression holding one or more files.
+    Const GzExtensionName   As String = "tgz"
+    Const NoExtensionName   As String = "tar"
+    
+    ' Custom error values.
+    Const ErrorPathFile     As Long = 75
+    Const ErrorOther        As Long = -1
+    Const ErrorNone         As Long = 0
+    ' Maximum (arbitrary) allowed count of created archive versions.
+    Const MaxTarVersion     As Integer = 1000
+    
+    ' Tar directive constants (note: case sensitive).
+    Const CompressionHigh   As String = "J"
+    Const CompressionLow    As String = "z"
+    Const CompressionNone   As String = ""
+    
+    Dim TarExtensionName    As String
+    Dim TarExtension        As String
+       
+    Dim TarPath             As String
+    Dim TarName             As String
+    Dim TarFile             As String
+    Dim TarBase             As String
+    Dim Extension           As String
+    Dim ExtensionName       As String
+    Dim Version             As Integer
+    Dim PathName            As String
+    Dim Result              As Long
+    
+    ' Extension of an archive file holding one or more files.
+    If NoCompression = False Then
+        TarExtensionName = GzExtensionName
+    Else
+        TarExtensionName = NoExtensionName
+    End If
+    TarExtension = "." & TarExtensionName
+    
+    If FileSystemObject.FileExists(Path) Then
+        ' The source is an existing file.
+        TarName = FileSystemObject.GetFileName(Path)
+        If ExtensionName = "" Then
+            TarName = FileSystemObject.GetBaseName(Path) & TarExtension
+            ExtensionName = FileSystemObject.GetExtensionName(TarName)
+        End If
+        TarPath = FileSystemObject.GetFile(Path).ParentFolder
+        Extension = "." & ExtensionName
+    ElseIf FileSystemObject.FolderExists(Path) Then
+        ' The source is an existing folder or fileshare.
+        TarBase = FileSystemObject.GetBaseName(Path)
+        If TarBase <> "" Then
+            ' Path is a folder.
+            TarName = TarBase & TarExtension
+            TarPath = FileSystemObject.GetFolder(Path).ParentFolder
+            Extension = TarExtension
+        Else
+            ' Path is a fileshare, thus has no parent folder.
+        End If
+    Else
+        ' The source does not exist.
+    End If
+       
+    If TarName = "" Then
+        ' Nothing to compress. Exit.
+        Destination = ""
+    Else
+        If Destination <> "" Then
+            If FileSystemObject.GetExtensionName(Destination) = "" Then
+                ' Destination is a folder.
+                If FileSystemObject.FolderExists(Destination) Then
+                    TarPath = Destination
+                Else
+                    ' No folder for the cabinet file. Exit.
+                    Destination = ""
+                End If
+            Else
+                ' Destination is a single compressed file.
+                TarName = FileSystemObject.GetFileName(Destination)
+                If TarName = Destination Then
+                    ' No path given. Use TarPath as is.
+                Else
+                    ' Use path of Destination.
+                    TarPath = FileSystemObject.GetParentFolderName(Destination)
+                End If
+            End If
+        Else
+            ' Use the already found folder of the source.
+            Destination = TarPath
+        End If
+    End If
+    
+    If Destination <> "" Then
+        TarFile = FileSystemObject.BuildPath(TarPath, TarName)
+        
+        If FileSystemObject.FileExists(TarFile) Then
+            If OverWrite = True Then
+                ' Delete an existing file.
+                FileSystemObject.DeleteFile TarFile, True
+                ' At this point either the file is deleted or an error is raised.
+            Else
+                TarBase = FileSystemObject.GetBaseName(TarFile)
+                ExtensionName = FileSystemObject.GetExtensionName(TarFile)
+                If ExtensionName <> TarExtensionName Then
+                    Extension = "." & ExtensionName
+                End If
+                ' Modify name of the cabinet file to be created to preserve an existing file:
+                '   "Example.tar" -> "Example (2).tar", etc.
+                Version = Version + 1
+                Do
+                    Version = Version + 1
+                    TarFile = FileSystemObject.BuildPath(TarPath, TarBase & Format(Version, " \(0\)") & Extension)
+                Loop Until FileSystemObject.FileExists(TarFile) = False Or Version > MaxTarVersion
+                If Version > MaxTarVersion Then
+                    ' Give up.
+                    Err.Raise ErrorPathFile, "Tar Create", "File could not be created."
+                End If
+                TarName = FileSystemObject.GetFileName(TarFile)
+            End If
+        End If
+        ' Set returned file name.
+        Destination = TarFile
+        ' Create the archive file.
+        PathName = "tar.exe -c{2}f ""{1}"" ""{0}"""
+        PathName = Replace(PathName, "{0}", Path)
+        PathName = Replace(PathName, "{1}", Destination)
+        If NoCompression = False Then
+            PathName = Replace(PathName, "{2}", IIf(HighCompression, CompressionHigh, CompressionLow))
+        Else
+            PathName = Replace(PathName, "{2}", CompressionNone)
+        End If
+        ' ShellWait returns True for no errors.
+        Result = ShellWait("cmd /c " & PathName & "", vbMinimizedNoFocus)
+    End If
+    
+    Set ShellApplication = Nothing
+    Set FileSystemObject = Nothing
+    
+    If Err.Number <> ErrorNone Then
+        Destination = ""
+        Result = Err.Number
+    ElseIf Destination = "" Then
+        Result = ErrorOther
+    End If
+    
+    Tar = Result
+
+End Function
+
+' Dearchive ("untar") files from a tar file to a folder using Windows Explorer.
+' Default behaviour is similar to right-clicking a file/folder and selecting:
+'   Unpack all ...
+'
+' Parameters:
+'   Path:
+'       Valid (UNC) path to a valid archive file. Extension can be another than "tar".
+'   Destination:
+'       (Optional) Valid (UNC) path to the destination folder.
+'   Overwrite:
+'       (Optional) Leave (default) or overwrite an existing folder.
+'       If False, an existing folder will keep other files than those in the dearchived tar file.
+'       If True, an existing folder will first be deleted, then recreated.
+'
+'   Path and Destination can be relative paths. If so, the current path is used.
+'
+'   If success, 0 is returned, and Destination holds the full path of the created folder.
+'   If error, error code is returned, and Destination will be zero length string.
+'
+' Early binding requires references to:
+'
+'   Shell:
+'       Microsoft Shell Controls And Automation
+'
+'   Scripting.FileSystemObject:
+'       Microsoft Scripting Runtime
+'
+' 2023-10-28. Gustav Brock. Cactus Data ApS, CPH.
+'
+Public Function UnTar( _
+    ByVal Path As String, _
+    Optional ByRef Destination As String, _
+    Optional ByVal OverWrite As Boolean) _
+    As Long
+    
+#If EarlyBinding Then
+    ' Microsoft Scripting Runtime.
+    Dim FileSystemObject    As Scripting.FileSystemObject
+    ' Microsoft Shell Controls And Automation.
+    Dim ShellApplication    As Shell
+    
+    Set FileSystemObject = New Scripting.FileSystemObject
+    Set ShellApplication = New Shell
+#Else
+    Dim FileSystemObject    As Object
+    Dim ShellApplication    As Object
+
+    Set FileSystemObject = CreateObject("Scripting.FileSystemObject")
+    Set ShellApplication = CreateObject("Shell.Application")
+#End If
+               
+    ' Extension of a cabinet file holding one or more files.
+    Const CabExtensionName  As String = "cab"
+    ' Extension of an archive file holding one or more files.
+    Const TarExtensionName  As String = "tar"
+    ' Extension of a compressed archive file holding one or more files.
+    Const TgzExtensionName  As String = "tgz"
+    ' Mandatory extension of zip file.
+    Const ZipExtensionName  As String = "zip"
+    Const TarExtension      As String = "." & TarExtensionName
+    
+    ' Constants for Shell.Application.
+    Const DoOverwrite       As Long = &H0&
+    Const NoOverwrite       As Long = &H8&
+    Const YesToAll          As Long = &H10&
+    ' Custom error values.
+    Const ErrorNone         As Long = 0
+    Const ErrorOther        As Long = -1
+    
+    Dim TarName             As String
+    Dim TarPath             As String
+    Dim TarTemp             As String
+    Dim Options             As Variant
+    Dim Result              As Long
+    
+    If FileSystemObject.FileExists(Path) Then
+        ' The source is an existing file.
+        TarName = FileSystemObject.GetBaseName(Path)
+        TarPath = FileSystemObject.GetFile(Path).ParentFolder
+    End If
+    
+    If TarName = "" Then
+        ' Nothing to untar. Exit.
+        Destination = ""
+    Else
+        ' Select or create destination folder.
+        If Destination <> "" Then
+            ' Untar to a custom folder.
+            If _
+                FileSystemObject.GetExtensionName(Destination) = CabExtensionName Or _
+                FileSystemObject.GetExtensionName(Destination) = TarExtensionName Or _
+                FileSystemObject.GetExtensionName(Destination) = TgzExtensionName Or _
+                FileSystemObject.GetExtensionName(Destination) = ZipExtensionName Then
+                ' Do not untar to a folder named *.cab, *.tar, tgz, or *.zip.
+                ' Strip extension.
+                Destination = FileSystemObject.BuildPath( _
+                    FileSystemObject.GetParentFolderName(Destination), _
+                    FileSystemObject.GetBaseName(Destination))
+            End If
+        Else
+            ' Untar to a subfolder of the folder of the tarfile.
+            Destination = FileSystemObject.BuildPath(TarPath, TarName)
+        End If
+            
+        If FileSystemObject.FolderExists(Destination) And OverWrite = True Then
+            ' Delete the existing folder.
+            FileSystemObject.DeleteFolder Destination, True
+        End If
+        If Not FileSystemObject.FolderExists(Destination) Then
+            ' Create the destination folder.
+            FileSystemObject.CreateFolder Destination
+        End If
+        
+        If Not FileSystemObject.FolderExists(Destination) Then
+            ' For some reason the destination folder does not exist and cannot be created.
+            ' Exit.
+            Destination = ""
+        Else
+            ' Destination folder existed or has been created successfully.
+            ' Resolve relative paths.
+            Destination = FileSystemObject.GetAbsolutePathName(Destination)
+            Path = FileSystemObject.GetAbsolutePathName(Path)
+            ' Check file extension.
+            If FileSystemObject.GetExtensionName(Path) = TarExtensionName Then
+                ' File extension is OK.
+                TarTemp = Path
+            Else
+                ' Rename the tar file by adding a tar extension.
+                TarTemp = Path & TarExtension
+                FileSystemObject.MoveFile Path, TarTemp
+            End If
+            ' Untar files and folders from the tar file to the destination folder.
+            If OverWrite Then
+                Options = DoOverwrite Or YesToAll
+            Else
+                Options = NoOverwrite Or YesToAll
+            End If
+            ShellApplication.Namespace(CVar(Destination)).CopyHere ShellApplication.Namespace(CVar(TarTemp)).Items, Options
+            If TarTemp <> Path Then
+                ' Remove the tar extension to restore the original file name.
+                FileSystemObject.MoveFile TarTemp, Path
+            End If
+        End If
+    End If
+    
+    Set ShellApplication = Nothing
+    Set FileSystemObject = Nothing
+    
+    If Err.Number <> ErrorNone Then
+        Destination = ""
+        Result = Err.Number
+    ElseIf Destination = "" Then
+        Result = ErrorOther
+    End If
+    
+    UnTar = Result
+     
+End Function
+
 ' Unzip files from a zip file to a folder using Windows Explorer.
 ' Default behaviour is similar to right-clicking a file/folder and selecting:
-'   Unzip all ...
+'   Unpack all ...
 '
 ' Parameters:
 '   Path:
@@ -873,12 +1256,12 @@ End Function
 '   Scripting.FileSystemObject:
 '       Microsoft Scripting Runtime
 '
-' 2017-10-22. Gustav Brock. Cactus Data ApS, CPH.
+' 2023-10-28. Gustav Brock. Cactus Data ApS, CPH.
 '
 Public Function UnZip( _
     ByVal Path As String, _
     Optional ByRef Destination As String, _
-    Optional ByVal Overwrite As Boolean) _
+    Optional ByVal OverWrite As Boolean) _
     As Long
     
 #If EarlyBinding Then
@@ -899,11 +1282,18 @@ Public Function UnZip( _
                
     ' Extension of a cabinet file holding one or more files.
     Const CabExtensionName  As String = "cab"
+    ' Extension of an archive file holding one or more files.
+    Const TarExtensionName  As String = "tar"
+    ' Extension of a compressed archive file holding one or more files.
+    Const TgzExtensionName  As String = "tgz"
     ' Mandatory extension of zip file.
     Const ZipExtensionName  As String = "zip"
     Const ZipExtension      As String = "." & ZipExtensionName
+    
     ' Constants for Shell.Application.
-    Const OverWriteAll      As Long = &H10&
+    Const DoOverwrite       As Long = &H0&
+    Const NoOverwrite       As Long = &H8&
+    Const YesToAll          As Long = &H10&
     ' Custom error values.
     Const ErrorNone         As Long = 0
     Const ErrorOther        As Long = -1
@@ -911,6 +1301,7 @@ Public Function UnZip( _
     Dim ZipName             As String
     Dim ZipPath             As String
     Dim ZipTemp             As String
+    Dim Options             As Variant
     Dim Result              As Long
     
     If FileSystemObject.FileExists(Path) Then
@@ -928,8 +1319,10 @@ Public Function UnZip( _
             ' Unzip to a custom folder.
             If _
                 FileSystemObject.GetExtensionName(Destination) = CabExtensionName Or _
+                FileSystemObject.GetExtensionName(Destination) = TarExtensionName Or _
+                FileSystemObject.GetExtensionName(Destination) = TgzExtensionName Or _
                 FileSystemObject.GetExtensionName(Destination) = ZipExtensionName Then
-                ' Do not unzip to a folder named *.cab or *.zip.
+                ' Do not unzip to a folder named *.cab, *.tar, or *.zip.
                 ' Strip extension.
                 Destination = FileSystemObject.BuildPath( _
                     FileSystemObject.GetParentFolderName(Destination), _
@@ -940,7 +1333,7 @@ Public Function UnZip( _
             Destination = FileSystemObject.BuildPath(ZipPath, ZipName)
         End If
             
-        If FileSystemObject.FolderExists(Destination) And Overwrite = True Then
+        If FileSystemObject.FolderExists(Destination) And OverWrite = True Then
             ' Delete the existing folder.
             FileSystemObject.DeleteFolder Destination, True
         End If
@@ -968,7 +1361,12 @@ Public Function UnZip( _
                 FileSystemObject.MoveFile Path, ZipTemp
             End If
             ' Unzip files and folders from the zip file to the destination folder.
-            ShellApplication.Namespace(CVar(Destination)).CopyHere ShellApplication.Namespace(CVar(ZipTemp)).Items, OverWriteAll
+            If OverWrite Then
+                Options = DoOverwrite Or YesToAll
+            Else
+                Options = NoOverwrite Or YesToAll
+            End If
+            ShellApplication.Namespace(CVar(Destination)).CopyHere ShellApplication.Namespace(CVar(ZipTemp)).Items, Options
             If ZipTemp <> Path Then
                 ' Remove the zip extension to restore the original file name.
                 FileSystemObject.MoveFile ZipTemp, Path
@@ -1022,7 +1420,7 @@ End Function
 Public Function Zip( _
     ByVal Path As String, _
     Optional ByRef Destination As String, _
-    Optional ByVal Overwrite As Boolean) _
+    Optional ByVal OverWrite As Boolean) _
     As Long
     
 #If EarlyBinding Then
@@ -1117,7 +1515,7 @@ Public Function Zip( _
         ZipFile = FileSystemObject.BuildPath(ZipPath, ZipName)
 
         If FileSystemObject.FileExists(ZipFile) Then
-            If Overwrite = True Then
+            If OverWrite = True Then
                 ' Delete an existing file.
                 FileSystemObject.DeleteFile ZipFile, True
                 ' At this point either the file is deleted or an error is raised.
