@@ -1027,7 +1027,7 @@ Public Function Tar( _
                 If ExtensionName <> TarExtensionName Then
                     Extension = "." & ExtensionName
                 End If
-                ' Modify name of the cabinet file to be created to preserve an existing file:
+                ' Modify name of the archive file to be created to preserve an existing file:
                 '   "Example.tar" -> "Example (2).tar", etc.
                 Version = Version + 1
                 Do
