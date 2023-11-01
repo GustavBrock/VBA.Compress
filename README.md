@@ -64,6 +64,8 @@ Full documentation can be found here:
 
 [Handle cabinet files and folders with VBA the Windows Explorer way][ee cab files]
 
+[Handle Archive Files and Folders With VBA the Windows Explorer Way][ee tar files]
+
 <hr>
 
 *If you wish to support my work or need extended support or advice, feel free to:*
@@ -77,11 +79,13 @@ Full documentation can be found here:
 [zip folders]: images/GitZip11.png
 [cab folders]: images/GitCab11.png
 [tar folders]: images/GitTar11.png
-[ee logo]: /images/EE%20Logo.png
+[ee logo]: images/EE%20Logo.png
 [buy me a coffee]: images/BuyMeACoffee.png
 [demos folder]: ./demos
 [ee zip files]: https://www.experts-exchange.com/articles/31130/Zip-and-unzip-files-and-folders-with-VBA-the-Windows-Explorer-way.html?preview=yvSy86kgNss%3D
 [ee cab files]: https://www.experts-exchange.com/articles/31144/Handle-cabinet-files-and-folders-with-VBA-the-Windows-Explorer-way.html?preview=i8Bvq8gkxiA%3D
+[ee tar files]: https://www.experts-exchange.com/articles/35655/Handle-Archive-Files-and-Folders-With-VBA-the-Windows-Explorer-Way.html?preview=546Zf6%2BK49U%3D
+
 [mz tools]: https://www.mztools.com/
 [code documentation]: https://htmlpreview.github.io?https://github.com/GustavBrock/VBA.Compress/blob/master/documentation/Compress.htm
 
